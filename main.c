@@ -10,25 +10,29 @@
 #define EXIT_FAILURE 1
 #define EXIT_SUCCESS 0
 
+int background = 0;
+int background_num = 0;
 int token_counter(char * line, char * letter);
 int custom_fork(char ** arguments);
 int custom_execute(char ** arguments);
-void my_cd(char ** arguments);
+// void mycd(char ** arguments);
+int background_counter(char ** arguments);
+int check_background(char ** arguments);
+char ** get_splited_args(char * com, char * letter);
+void fatal(char * message, int code);
 
 int main()
 {
     while (1)
     {
         int n = 0;
-        int m = 0;
+        int k = 0;
         int c;
         int command_number;
         int token_number;
         char * com;
+        char * temp;
         char * t_command;
-        char * t_com;
-        char * tt_com;
-        char ** arguments;
         char command[MAX_SIZE] = {'\0'};
         char hostname[MAXHOSTNAMELEN] = {'\0'};
 
@@ -41,11 +45,12 @@ int main()
         }
 
         // print shell prompt
-        printf("%s@%s:%s >>> ", (char *)getenv("USER"), hostname, (char *)getenv("PWD"));
+        printf("%s@%s:%s >>> ", getenv("USER"), hostname, getenv("PWD"));
         
         // get input until press "ENTER" 
         while ((c = fgetc(stdin)))
         {
+            // c == "ENTER"
             if (c == 10)
             {
                 // if there are no commands, skip
@@ -54,74 +59,44 @@ int main()
 
                 command[n] = '\0';
 
-                if ((t_command = (char *)malloc(strlen(command) + 1)) == NULL)
-                {
-                    perror("Can not allocate memory!");
-                    exit(EXIT_FAILURE);
-                }
-
                 // TODO: add command in history 
 
-                strcpy(t_command, command);
-                
-                // count the number of the commands
-                command_number = token_counter(t_command, ";");
+                if ((temp = (char *)malloc(strlen(command) + 1)) == NULL)
+                    fatal("Can not allocate memory!", EXIT_FAILURE);
+                strcpy(temp, command);
 
-                while (m < command_number)
+                command_number = token_counter(temp, ";");
+
+                // execute "m" times 
+                for (int m = 0; m < command_number; m++)
                 {
+                    if ((t_command = (char *)malloc(strlen(command) + 1)) == NULL)
+                        fatal("Can not allocate memory!", EXIT_FAILURE);
                     strcpy(t_command, command);
 
-                    // get "m"th command
+                    // store "m" th command in com 
                     com = strtok(t_command, ";");
                     for (int i = 0; i < m; i++)
                         com = strtok(NULL, ";");
 
-                    if ((t_com = (char *)malloc(strlen(com) + 1)) == NULL)
-                    {
-                        perror("Can not allocate memory!");
-                        exit(EXIT_FAILURE);
-                    }
-                    if ((tt_com = (char *)malloc(strlen(com) + 1)) == NULL)
-                    {
-                        perror("Can not allocate memory!");
-                        exit(EXIT_FAILURE);
-                    }
-                    strcpy(t_com, com);
-                    strcpy(tt_com, com);
-
-                    // count the number of tokens in one command
-                    token_number = token_counter(tt_com, " ");
-
-                    if ((arguments = (char **)malloc((token_number + 1) * sizeof(char *))) == NULL)
-                    {
-                        perror("Can not allocat memory!");
-                        exit(EXIT_FAILURE);
-                    }
-
-                    // add tokens in arguments
-                    *arguments = strtok(t_com, " ");
-                    for (int i = 1; i < token_number; i++)
-                        *(arguments + i) = strtok(NULL, " ");
-                    // fill NULL pointer in last index for execvp
-                    *(arguments + token_number) = NULL;
-
-                    // TODO: check is pipe ?
-
-                    // TODO: check is redirection ?
-
-                    // execute the command
-                    int v;
-                    if ((v = custom_fork(arguments)) == 1)
-                        break;
+                    // 백그라운드 개수 만큼 잘라서 arguments로 만듬
+                    char ** arguments = get_splited_args(com, "&");
                     
+                    // TODO : 뒤에 &가 붙어서 백그라운드로 실행해야 된다면 background = 1하고 
+                    // pipe -> redirection 검사 후 실행 해줘야 함!
 
-                    // check arguments
-                    // for (int i = 0; i < token_number; i++)
+                    for (int i = 0; *(arguments + i) != NULL; i++)
+                    {
+                        int background = 0;
+
+                        char ** arguments2;
+                        arguments2 = get_splited_args(*(arguments + i), " ");
+                        custom_fork(arguments2);
+                    }
+
+                    // for (int i = 0; arguments[i] != NULL; i++)
                     //     printf("%s\n", *(arguments + i));
-                    
-                    m++;
                 }
-                free(t_command);
                 break;
             }
             else
@@ -169,26 +144,68 @@ int custom_fork(char ** arguments)
     // execute parent process
     else
     {
-        if((pid = waitpid(pid, &status, 0)) < 0)
+        if (background)
         {
-            perror("Can not wait!");
-            return 1;
+            waitpid(WNOHANG, &status, 0);
+            printf("%d\n", pid);
+        }
+        else
+        {
+            if((pid = waitpid(pid, &status, 0)) < 0)
+            {
+                perror("Can not wait!");
+                return 1;
+            }
         }
     }
-    
     return 0;
 }
 
 int custom_execute(char ** arguments)
 {
-    // TODO: make custom cd command
-    // if (strcmp(arguments[0], "cd") == 0)
-    //     my_cd(arguments);
     execvp(* arguments, arguments);
     return 0;
 }
 
-void my_cd(char ** arguments)
+void fatal(char * message, int code)
 {
-    // TODO: make custom cd command
+    perror(message);
+    exit(code);
+}
+
+char ** get_splited_args(char * com, char * letter)
+{
+    int token_number;
+    char * t_com;
+    char * tt_com;
+    char ** arguments;
+
+    if ((t_com = (char *)malloc(strlen(com) + 1)) == NULL)
+        fatal("Can not allocate memory!", EXIT_FAILURE);
+    
+    if ((tt_com = (char *)malloc(strlen(com) + 1)) == NULL)
+        fatal("Can not allocate memory!", EXIT_FAILURE);
+    
+
+    // use when store
+    strcpy(t_com, com);
+
+    // use when count
+    strcpy(tt_com, com);
+
+    // count the number of tokens in one command
+    token_number = token_counter(tt_com, letter);
+
+    if ((arguments = (char **)malloc((token_number + 1) * sizeof(char *))) == NULL)
+        fatal("Can not allocate memory!", EXIT_FAILURE);
+
+    // add tokens in arguments
+    *arguments = strtok(t_com, letter);
+    for (int i = 1; i < token_number; i++)
+        *(arguments + i) = strtok(NULL, letter);
+    
+    // fill NULL pointer in last index
+    *(arguments + token_number) = NULL;
+
+    return arguments;
 }
