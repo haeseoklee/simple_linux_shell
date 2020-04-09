@@ -11,7 +11,6 @@
 #define EXIT_SUCCESS 0
 
 int idx;
-int next = 1;
 int background = 0;
 int token_counter(char * line, char * letter);
 int command_counter(char * line, char letter);
@@ -24,7 +23,7 @@ void fatal(char * message, int code);
 
 int main()
 {
-    while (1 & next)
+    while (1)
     {
         int n = 0;
         int k = 0;
