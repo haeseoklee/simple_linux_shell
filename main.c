@@ -10,31 +10,40 @@
 #define EXIT_FAILURE 1
 #define EXIT_SUCCESS 0
 
+int idx;
+int next = 1;
 int background = 0;
-int background_num = 0;
 int token_counter(char * line, char * letter);
+int command_counter(char * line, char letter);
 int custom_fork(char ** arguments);
 int custom_execute(char ** arguments);
 // void mycd(char ** arguments);
-int background_counter(char ** arguments);
 int check_background(char ** arguments);
 char ** get_splited_args(char * com, char * letter);
 void fatal(char * message, int code);
 
 int main()
 {
-    while (1)
+    while (1 & next)
     {
         int n = 0;
         int k = 0;
         int c;
+        int b;
         int command_number;
+        int background_number;
         int token_number;
         char * com;
+        char * com2;
+        char * com3;
+        char * ptr;
         char * temp;
         char * t_command;
         char command[MAX_SIZE] = {'\0'};
         char hostname[MAXHOSTNAMELEN] = {'\0'};
+
+        // initialize process number
+        idx = 0;
 
         // get host name
         int h = gethostname(hostname, MAXHOSTNAMELEN);
@@ -79,23 +88,29 @@ int main()
                     for (int i = 0; i < m; i++)
                         com = strtok(NULL, ";");
 
+
+                    background_number = command_counter(com, '&');
+                    
                     // 백그라운드 개수 만큼 잘라서 arguments로 만듬
                     char ** arguments = get_splited_args(com, "&");
                     
                     // TODO : 뒤에 &가 붙어서 백그라운드로 실행해야 된다면 background = 1하고 
                     // pipe -> redirection 검사 후 실행 해줘야 함!
-
+                    b = 0;
+                    
                     for (int i = 0; *(arguments + i) != NULL; i++)
                     {
-                        int background = 0;
+                        background = 0;
+                        if (b < background_number)
+                        {
+                            background = 1;
+                            b++;
+                        }
 
                         char ** arguments2;
                         arguments2 = get_splited_args(*(arguments + i), " ");
                         custom_fork(arguments2);
                     }
-
-                    // for (int i = 0; arguments[i] != NULL; i++)
-                    //     printf("%s\n", *(arguments + i));
                 }
                 break;
             }
@@ -105,6 +120,17 @@ int main()
             }
         }
     }
+}
+
+int command_counter(char * line, char letter)
+{
+    int counter = 0;
+    for(int i = 0; i < strlen(line); i++)
+    {
+        if (*(line + i) == letter)
+            counter++;
+    }
+    return counter;
 }
 
 int token_counter(char * line, char * letter)
@@ -137,7 +163,6 @@ int custom_fork(char ** arguments)
     // execute child process
     else if (pid == 0)
     {
-        int v;
         custom_execute(arguments);
         exit(0);
     }
@@ -146,16 +171,13 @@ int custom_fork(char ** arguments)
     {
         if (background)
         {
-            waitpid(WNOHANG, &status, 0);
-            printf("%d\n", pid);
+            printf("[%d] %d\n", ++idx, pid);
+            waitpid(0, &status, WNOHANG);
         }
         else
         {
             if((pid = waitpid(pid, &status, 0)) < 0)
-            {
-                perror("Can not wait!");
-                return 1;
-            }
+                fatal("Can not wait!", 1);
         }
     }
     return 0;
