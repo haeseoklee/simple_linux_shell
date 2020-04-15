@@ -69,7 +69,7 @@ int main()
 
                 // TODO: add command in history 
 
-                if ((temp = (char *)malloc(strlen(command) + 1)) == NULL)
+                if ((temp = strdup(command)) == NULL)
                     fatal("Can not allocate memory!", EXIT_FAILURE);
                 strcpy(temp, command);
 
@@ -78,7 +78,7 @@ int main()
                 // execute "m" times 
                 for (int m = 0; m < command_number; m++)
                 {
-                    if ((t_command = (char *)malloc(strlen(command) + 1)) == NULL)
+                    if ((t_command = strdup(command)) == NULL)
                         fatal("Can not allocate memory!", EXIT_FAILURE);
                     strcpy(t_command, command);
 
@@ -201,10 +201,10 @@ char ** get_splited_args(char * com, char * letter)
     char * tt_com;
     char ** arguments;
 
-    if ((t_com = (char *)malloc(strlen(com) + 1)) == NULL)
+    if ((t_com = strdup(com)) == NULL)
         fatal("Can not allocate memory!", EXIT_FAILURE);
     
-    if ((tt_com = (char *)malloc(strlen(com) + 1)) == NULL)
+    if ((tt_com = strdup(com)) == NULL)
         fatal("Can not allocate memory!", EXIT_FAILURE);
     
 
@@ -227,6 +227,6 @@ char ** get_splited_args(char * com, char * letter)
     
     // fill NULL pointer in last index
     *(arguments + token_number) = NULL;
-
+    
     return arguments;
 }
