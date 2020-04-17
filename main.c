@@ -12,6 +12,8 @@
 
 int idx;
 int background = 0;
+char ** arguments;
+char ** arguments2;
 int token_counter(char * line, char * letter);
 int command_counter(char * line, char letter);
 int custom_fork(char ** arguments);
@@ -29,19 +31,12 @@ int main()
         int k = 0;
         int c;
         int b;
-        int command_number;
-        int background_number;
-        int token_number;
-        char * com;
-        char * com2;
-        char * com3;
-        char * ptr;
-        char * temp;
-        char * t_command;
+        int command_number, background_number, token_number;
+        char * com, * com2, * com3, * ptr, * temp, * t_command;
         char command[MAX_SIZE] = {'\0'};
         char hostname[MAXHOSTNAMELEN] = {'\0'};
 
-        // initialize process number
+        // initializde process number
         idx = 0;
 
         // get host name
@@ -91,7 +86,7 @@ int main()
                     background_number = command_counter(com, '&');
                     
                     // 백그라운드 개수 만큼 잘라서 arguments로 만듬
-                    char ** arguments = get_splited_args(com, "&");
+                    arguments = get_splited_args(com, "&");
                     
                     // TODO : 뒤에 &가 붙어서 백그라운드로 실행해야 된다면 background = 1하고 
                     // pipe -> redirection 검사 후 실행 해줘야 함!
@@ -105,8 +100,6 @@ int main()
                             background = 1;
                             b++;
                         }
-
-                        char ** arguments2;
                         arguments2 = get_splited_args(*(arguments + i), " ");
                         custom_fork(arguments2);
                     }
