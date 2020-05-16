@@ -1,3 +1,10 @@
+//
+//  main.c
+//  myshell
+//
+//  Created by Haeseok Lee on 2020/05/12.
+//  Copyright © 2020 Haeseok Lee. All rights reserved.
+//
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,107 +17,108 @@
 #define EXIT_FAILURE 1
 #define EXIT_SUCCESS 0
 
-int idx;
-int background = 0;
-char ** arguments;
-char ** arguments2;
+int idx, s_stdin, s_stdout;
+int fd[2];
+int isbackground = 0, ispipe = 0;
+char buffer[MAX_SIZE];
+char ** arguments, ** arguments2, ** arguments3;
+
 int token_counter(char * line, char * letter);
 int command_counter(char * line, char letter);
-int custom_fork(char ** arguments);
-int custom_execute(char ** arguments);
-// void mycd(char ** arguments);
-int check_background(char ** arguments);
 char ** get_splited_args(char * com, char * letter);
+void my_fork(char ** arguments);
+void my_execute(char ** arguments);
+void my_history(char * option, char * command);
+// void mycd(char ** arguments);
 void fatal(char * message, int code);
+
+
 
 int main()
 {
+    // store standard fd
+    s_stdin = dup(STDIN_FILENO);
+    s_stdout = dup(STDOUT_FILENO);
     while (1)
     {
-        int n = 0;
-        int k = 0;
-        int c;
-        int b;
-        int command_number, background_number, token_number;
-        char * com, * com2, * com3, * ptr, * temp, * t_command;
+        int b, p;
+        int command_number, background_number, pipe_number;
+        char * com, * temp, * t_command;
         char command[MAX_SIZE] = {'\0'};
         char hostname[MAXHOSTNAMELEN] = {'\0'};
-
-        // initializde process number
+    
+        // initialize vars
         idx = 0;
-
+        ispipe = 0;
+        isbackground = 0;
+        
+        // initialize standard fd
+        dup2(s_stdin, STDIN_FILENO);
+        dup2(s_stdout, STDOUT_FILENO);
+        
         // get host name
-        int h = gethostname(hostname, MAXHOSTNAMELEN);
-        if (h) 
-        {
-            perror("Can not get hostname");
-            exit(EXIT_FAILURE);
-        }
-
+        gethostname(hostname, MAXHOSTNAMELEN);
+        
         // print shell prompt
         printf("%s@%s:%s >>> ", getenv("USER"), hostname, getenv("PWD"));
         
-        // get input until press "ENTER" 
-        while ((c = fgetc(stdin)))
+        fgets(command, MAX_SIZE, stdin);
+        command[strlen(command)-1] = '\0';
+        
+        if (strlen(command) == 0)
+            continue;
+        
+        if (strcmp(command, "exit") == 0)
+            exit(0);
+        
+        if (strcmp(command, "history") == 0)
         {
-            // c == "ENTER"
-            if (c == 10)
+            my_history("show", NULL);
+            continue;
+        }
+        
+        if ((temp = strdup(command)) == NULL)
+            fatal("Can not allocate memory!", EXIT_FAILURE);
+        strcpy(temp, command);
+
+        command_number = token_counter(temp, ";");
+
+        // execute "m" times
+        for (int m = 0; m < command_number; m++)
+        {
+            if ((t_command = strdup(command)) == NULL)
+                fatal("Can not allocate memory!", EXIT_FAILURE);
+            strcpy(t_command, command);
+
+            // store "m" th command in com
+            com = strtok(t_command, ";");
+            for (int i = 0; i < m; i++)
+                com = strtok(NULL, ";");
+
+            b = 0;
+            background_number = command_counter(com, '&');
+            arguments = get_splited_args(com, "&");
+            for (int i = 0; *(arguments + i) != NULL; i++)
             {
-                // if there are no commands, skip
-                if (strlen(command) == 0)
-                    break;
-
-                command[n] = '\0';
-
-                // TODO: add command in history 
-
-                if ((temp = strdup(command)) == NULL)
-                    fatal("Can not allocate memory!", EXIT_FAILURE);
-                strcpy(temp, command);
-
-                command_number = token_counter(temp, ";");
-
-                // execute "m" times 
-                for (int m = 0; m < command_number; m++)
+                isbackground = 0;
+                if (b++ < background_number)
+                    isbackground = 1;
+                p = 0;
+                pipe_number = command_counter(*(arguments + i), '|');
+                arguments2 = get_splited_args(*(arguments + i), "|");
+                for (int j = 0; *(arguments2 + j) != NULL; j++)
                 {
-                    if ((t_command = strdup(command)) == NULL)
-                        fatal("Can not allocate memory!", EXIT_FAILURE);
-                    strcpy(t_command, command);
-
-                    // store "m" th command in com 
-                    com = strtok(t_command, ";");
-                    for (int i = 0; i < m; i++)
-                        com = strtok(NULL, ";");
-
-
-                    background_number = command_counter(com, '&');
-                    
-                    // 백그라운드 개수 만큼 잘라서 arguments로 만듬
-                    arguments = get_splited_args(com, "&");
-                    
-                    // TODO : 뒤에 &가 붙어서 백그라운드로 실행해야 된다면 background = 1하고 
-                    // pipe -> redirection 검사 후 실행 해줘야 함!
-                    b = 0;
-                    
-                    for (int i = 0; *(arguments + i) != NULL; i++)
-                    {
-                        background = 0;
-                        if (b < background_number)
-                        {
-                            background = 1;
-                            b++;
-                        }
-                        arguments2 = get_splited_args(*(arguments + i), " ");
-                        custom_fork(arguments2);
-                    }
+                    ispipe = 0;
+                    if (p++ < pipe_number)
+                        ispipe = 1;
+                    arguments3 = get_splited_args(*(arguments2 + j), " ");
+                    my_fork(arguments3);
                 }
-                break;
-            }
-            else
-            {
-                command[n++] = (char) c;
             }
         }
+        // append command in history
+        my_history("append", command);
+
     }
 }
 
@@ -143,42 +151,90 @@ int token_counter(char * line, char * letter)
     return counter;
 }
 
-int custom_fork(char ** arguments)
+void my_fork(char ** arguments)
 {
     int status;
     int pid;
-    if ((pid = fork()) < 0)
+    if (ispipe)
     {
-        perror("Can not fork!");
-        return 1;
+        pipe(fd);
+//        fcntl(fd[0], fcntl(fd[0], F_SETPIPE_SZ, 1024 * 1024);
+//        fcntl(fd[1], F_SETPIPE_SZ, 1024 * 1024);
     }
+    
+
+    if ((pid = fork()) < 0)
+        fatal("Can not fork!", EXIT_FAILURE);
+    
     // execute child process
     else if (pid == 0)
     {
-        custom_execute(arguments);
-        exit(0);
+        if (ispipe)
+        {
+            close(fd[0]);
+            dup2(fd[1], STDOUT_FILENO);
+        }
+        my_execute(arguments);
+        exit(1);
     }
     // execute parent process
     else
     {
-        if (background)
+        if (ispipe)
+        {
+            close(fd[1]);
+            dup2(fd[0], STDIN_FILENO);
+        }
+        if (isbackground)
         {
             printf("[%d] %d\n", ++idx, pid);
-            waitpid(0, &status, WNOHANG);
         }
         else
         {
+            sleep(1);
             if((pid = waitpid(pid, &status, 0)) < 0)
                 fatal("Can not wait!", 1);
+            
         }
+        if (ispipe)
+        {
+            close(fd[0]);
+            close(fd[1]);
+        }
+
     }
-    return 0;
 }
 
-int custom_execute(char ** arguments)
+void my_execute(char ** arguments)
 {
     execvp(* arguments, arguments);
-    return 0;
+}
+
+void my_history(char * option, char * command)
+{
+    FILE * fp;
+    char buffer[MAX_SIZE+10];
+    if (strcmp(option, "show") == 0)
+    {
+        int idx = 0;
+        if ((fp = fopen("./history.txt", "r")) == NULL)
+            puts("No history");
+        
+        while(fgets(buffer, MAX_SIZE, fp))
+        {
+            printf(" %d  %s", ++idx, buffer);
+            memset(buffer, '\0', MAX_SIZE);
+        }
+    }
+    else
+    {
+        if ((fp = fopen("./history.txt", "a+")) == NULL)
+            fatal("Can not open file!", EXIT_FAILURE);
+        sprintf(buffer, "%s\n", command);
+        if (fputs(buffer, fp) < 0)
+            fatal("Can not write!", EXIT_FAILURE);
+    }
+    fclose(fp);
 }
 
 void fatal(char * message, int code)
@@ -201,10 +257,10 @@ char ** get_splited_args(char * com, char * letter)
         fatal("Can not allocate memory!", EXIT_FAILURE);
     
 
-    // use when store
+    // for storing
     strcpy(t_com, com);
 
-    // use when count
+    // for counting
     strcpy(tt_com, com);
 
     // count the number of tokens in one command
