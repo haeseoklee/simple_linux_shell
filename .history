@@ -1,0 +1,11 @@
+ls
+ls  > pwd
+ls > pwd >> whoami 2> whoami >| whoami
+history
+history
+ls  > pwd
+history
+ls -al | grep m | grep c ;ls
+history
+history
+history
