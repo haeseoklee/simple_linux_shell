@@ -2,7 +2,7 @@
 # Created by https://www.gitignore.io/api/c,linux
 # Edit at https://www.gitignore.io/?templates=c,linux
 
-.main
+main
 .history
 
 ### C ###
