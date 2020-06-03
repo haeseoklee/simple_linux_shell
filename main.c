@@ -13,13 +13,14 @@
 #include <sys/wait.h>
 #include <sys/param.h>
 
-#define MAX_SIZE     1000
+#define MAX_SIZE     1024
 #define EXIT_FAILURE 1
 #define EXIT_SUCCESS 0
+#define PERM         0777
 
-int idx, s_stdin, s_stdout;
-int fd[2];
-int isbackground = 0, ispipe = 0, isredirec1 = 0, isredirec2 = 0, isredirec3 = 0, isredirec4 = 0, isredirec5 = 0;
+int idx, s_stdin, s_stdout, s_sterr;
+int fd[2], rfd, rfd2;
+int isbackground = 0, ispipe = 0;
 char **arguments0, ** arguments1, ** arguments2, ** arguments3, ** arguments4;
 
 int token_counter(char * line, char * letter);
@@ -29,8 +30,10 @@ char ** get_splited_args(char * com, char * letter);
 char ** get_bisected_args(char * com, char * letter);
 void start(char * command);
 void my_fork(char ** arguments);
+void my_redirection(char * symbol, char * command);
 char * my_history(char * option, char * command);
 void my_cd(char ** arguments);
+void my_set(char ** arguments);
 void fatal(char * message, int code);
 char * strip(char * word, char letter);
 char * history_replace(char * command);
@@ -41,6 +44,7 @@ int main()
 {
     // store standard fd
     s_stdin = dup(STDIN_FILENO);
+    s_sterr = dup(STDERR_FILENO);
     s_stdout = dup(STDOUT_FILENO);
     while (1)
     {
@@ -54,6 +58,7 @@ int main()
         
         // initialize standard fd
         dup2(s_stdin, STDIN_FILENO);
+        dup2(s_sterr, STDERR_FILENO);
         dup2(s_stdout, STDOUT_FILENO);
         
         // get host name
@@ -72,18 +77,21 @@ int main()
     }
 }
 
-void start(char * command)
+void start(char * com)
 {
     int b, p;
     int semicolon_num, background_num, pipe_num, exclamation_num;
-    char * redirect_symbol;
+    char * redirect_symbol, * t_command, * command;
     
-    
-    exclamation_num = command_counter(command, "!");
+    t_command = strdup(com);
+    command = strdup(com);
+    exclamation_num = command_counter(t_command, "!");
     if (exclamation_num > 0)
     {
-        command = history_replace(command);
-        puts(command);
+        memset(command, '\0', strlen(command));
+        command = history_replace(t_command);
+        if (strcmp(command, t_command) != 0)
+            puts(command);
     }
     
     my_history("append", command);
@@ -93,6 +101,11 @@ void start(char * command)
     
     for (int i = 0; *(arguments0 + i) != NULL; i++)
     {
+        // initialize standard fd
+        dup2(s_stdin, STDIN_FILENO);
+        dup2(s_sterr, STDERR_FILENO);
+        dup2(s_stdout, STDOUT_FILENO);
+        
         b = 0;
         background_num = command_counter(*(arguments0 + i), "&");
         arguments1 = get_splited_args(*(arguments0 + i), "&");
@@ -116,41 +129,127 @@ void start(char * command)
                 redirect_symbol = get_front_redirect(*(arguments2 + k));
                 arguments3 = get_bisected_args(*(arguments2 + k), redirect_symbol);
                 
+
                 for (;;)
                 {
+                    
                     if (* (arguments3) == NULL)
                         break;
                     
-                    if (!strcmp(redirect_symbol, ">"))
-                        isredirec1 = 1;
-                    else if (!strcmp(redirect_symbol, "2>"))
-                        isredirec2 = 1;
-                    else if (!strcmp(redirect_symbol, ">>"))
-                        isredirec3 = 1;
-                    else if (!strcmp(redirect_symbol, "<"))
-                        isredirec4 = 1;
-                    else if (!strcmp(redirect_symbol, ">!"))
-                        isredirec5 = 1;
+                    if (* (arguments3 + 1) == NULL)
+                        * (arguments3 + 1) = "";
+                    
+                    char * symbols[6] = {">", "2>", ">>", "<", ">!"};
+                    for (int l = 0; l < 5; l++)
+                        if (!strcmp(redirect_symbol, symbols[l]))
+                            my_redirection(redirect_symbol, *(arguments3 + 1));
+                    
                     
                     arguments4 = get_splited_args(* arguments3, " ");
+                    
                     if (* arguments4 == NULL)
                         puts("");
                     else if (!strcmp(* arguments4, "cd"))
                         my_cd(arguments4);
+                    else if (!strcmp(* arguments4, "set"))
+                        my_set(arguments4);
                     else if (!strcmp(* arguments4, "history"))
                         my_history("show", NULL);
                     else
                         my_fork(arguments4);
-
                     if (* (arguments3 + 1) == NULL)
                         break;
                     
-                    redirect_symbol = get_front_redirect(* (arguments3 + 1));
-                    arguments3 = get_bisected_args(* (arguments3 + 1), redirect_symbol);
+                    redirect_symbol = get_front_redirect(*(arguments3 + 1));
+                    arguments3 = get_bisected_args(*(arguments3 + 1), redirect_symbol);
                 }
             }
         }
     }
+}
+
+
+void my_redirection(char * symbol, char * com)
+{
+    
+    char * filename = strip(com, ' ');
+    if (!strcmp(symbol, ">"))
+    {
+        FILE * fp;
+        char buffer[MAX_SIZE];
+        
+        if (access(".myshellrc", F_OK) == -1)
+        {
+            if ((rfd = open(filename, O_RDWR | O_CREAT | O_TRUNC, PERM)) < 0)
+                fatal("Can not create file", EXIT_FAILURE);
+            dup2(rfd, STDOUT_FILENO);
+            close(rfd);
+            return;
+        }
+        
+        if ((fp = fopen(".myshellrc", "r")) == NULL)
+            fatal("Can not read file", EXIT_FAILURE);
+        
+        fgets(buffer, MAX_SIZE, fp);
+        
+        if (!strcmp(buffer, "noclobber=-o\n"))
+        {
+            
+            if (access(filename, F_OK) != -1)
+            {
+                fprintf(stderr, "myshell: %s: cannot overwrite existing file\n", filename);
+                close(STDERR_FILENO);
+                close(STDOUT_FILENO);
+                fclose(fp);
+                return;
+            }
+            else
+            {
+                if ((rfd = open(filename, O_RDWR | O_CREAT | O_TRUNC, PERM)) < 0)
+                    fatal("Can not create file", EXIT_FAILURE);
+                dup2(rfd, STDOUT_FILENO);
+                fclose(fp);
+                close(rfd);
+                return;
+            }
+        }
+        if (!strcmp(buffer, "noclobber=+o\n") || !strlen(buffer))
+        {
+            if ((rfd = open(filename, O_RDWR | O_CREAT | O_TRUNC, PERM)) < 0)
+                fatal("Can not create file", EXIT_FAILURE);
+            dup2(rfd, STDOUT_FILENO);
+        }
+        fclose(fp);
+        close(rfd);
+    }
+    if (!strcmp(symbol, ">>"))
+    {
+       if ((rfd = open(filename, O_RDWR | O_CREAT | O_APPEND, PERM)) < 0)
+           fatal("Can not create file", EXIT_FAILURE);
+       dup2(rfd, STDOUT_FILENO);
+       close(rfd);
+    }
+    if (!strcmp(symbol, ">!"))
+    {
+        if ((rfd = open(filename, O_RDWR | O_CREAT | O_TRUNC, PERM)) < 0)
+            fatal("Can not create file", EXIT_FAILURE);
+        dup2(rfd, STDOUT_FILENO);
+        close(rfd);
+    }
+    if (!strcmp(symbol, "2>"))
+    {
+        if ((rfd = open(filename, O_RDWR | O_CREAT | O_APPEND, PERM)) < 0)
+            fatal("Can not create file", EXIT_FAILURE);
+        dup2(rfd, STDERR_FILENO);
+        close(rfd);
+    }
+    if (!strcmp(symbol, "<"))
+   {
+       if ((rfd = open(filename, O_RDONLY, PERM)) < 0)
+           fatal("Can not create file", EXIT_FAILURE);
+       dup2(rfd, STDIN_FILENO);
+       close(rfd);
+   }
 }
 
 
@@ -347,10 +446,10 @@ void my_fork(char ** arguments)
         {
             sleep(1);
             if((pid = waitpid(pid, &status, 0)) < 0)
-                fatal("Can not wait!", 1);
+                fatal("Can not wait!", EXIT_FAILURE);
             
         }
-        if (ispipe)
+        if (!ispipe)
         {
             close(fd[0]);
             close(fd[1]);
@@ -362,7 +461,8 @@ void my_fork(char ** arguments)
 char * my_history(char * option, char * command)
 {
     FILE * fp;
-    char buffer[MAX_SIZE+10];
+    char buffer[MAX_SIZE];
+    memset(buffer, '\0', MAX_SIZE);
     if (!strcmp(option, "show"))
     {
         
@@ -392,17 +492,22 @@ char * my_history(char * option, char * command)
         
         while(fgets(buffer, MAX_SIZE, fp))
         {
+            
             if (num == NULL)
                 break;
+                
             if (++idx == atoi(num))
             {
                 if ((new_command = strdup(buffer)) == NULL)
                     fatal("Can not allocate memory!", EXIT_FAILURE);
-                * (new_command + strlen(new_command)-1) = '\0';
+                fclose(fp);
+                *(new_command + strlen(new_command)-1) = '\0';
                 return new_command;
             }
             memset(buffer, '\0', MAX_SIZE);
         }
+        fclose(fp);
+        return command;
     }
     else
     {
@@ -415,6 +520,26 @@ char * my_history(char * option, char * command)
     fclose(fp);
     return "";
 }
+
+void my_set(char ** arguments)
+{
+    FILE * fp;
+    char new_option[MAX_SIZE];
+    if (*(arguments + 1) == NULL || *(arguments + 2) == NULL)
+        return;
+    if (!strcmp(*(arguments + 2), "noclobber"))
+    {
+        if ((fp = fopen("./.myshellrc", "w+")) == NULL)
+            fatal("Can not open file!", EXIT_FAILURE);
+        
+        sprintf(new_option, "%s=%s\n", *(arguments + 2), *(arguments + 1));
+        if (fwrite(new_option, 1, strlen(new_option), fp) < 0)
+            fatal("Can not write!", EXIT_FAILURE);
+        
+        fclose(fp);
+    }
+}
+
 
 void my_cd(char ** arguments)
 {
@@ -497,6 +622,7 @@ char * strip(char * word, char letter)
     int start = 0, end = (int)(strlen(word)-1);
     if ((new_word = (char *)malloc(MAX_SIZE)) == NULL)
         fatal("Can not allocate memory!", EXIT_FAILURE);
+    memset(new_word, '\0', MAX_SIZE);
     for(int i = 0; i < strlen(word); i++)
     {
         if (word[i] == letter)
@@ -513,18 +639,25 @@ char * strip(char * word, char letter)
     }
     for (int i = start; i <= end; i++)
         new_word[idx++] = word[i];
+    *(new_word + idx) = '\0';
     return new_word;
 }
 
-char * history_replace(char * command)
+char * history_replace(char * com)
 {
     char * comsave;
+    char * command;
     char ** arguments;
     int exclamation_num;
     
     if ((comsave = (char *)malloc(MAX_SIZE * sizeof(char *))) == NULL)
         fatal("Can not allocate memory!", EXIT_FAILURE);
     
+    if ((command = (char *)malloc(MAX_SIZE * sizeof(char *))) == NULL)
+        fatal("Can not allocate memory!", EXIT_FAILURE);
+    strcpy(command, com);
+    
+    memset(command, MAX_SIZE, '\0');
     memset(comsave, MAX_SIZE, '\0');
     
     START:
@@ -536,14 +669,22 @@ char * history_replace(char * command)
         exclamation_num = command_counter(*(arguments + i), "!");
         if (exclamation_num > 0)
         {
-            command = my_history("shortcut", *(arguments + i));
+            memset(command, MAX_SIZE, '\0');
+            command = strdup(my_history("shortcut", *(arguments + i)));
+            
+            if (!strcmp(command, *(arguments + i)))
+                return command;
             for (;*(arguments + i) != NULL; i++)
                 if (*(arguments + i + 1) != NULL)
                     sprintf(command, "%s;%s", command, *(arguments + i + 1));
             goto START;
         }
-        if (strlen(comsave) == 0)
+        if (i == 0)
+        {
+            memset(comsave, MAX_SIZE, '\0');
             strcpy(comsave, *(arguments + i));
+        }
+            
         else
             sprintf(comsave, "%s;%s", comsave, *(arguments + i));
     }
