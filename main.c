@@ -432,7 +432,7 @@ void my_fork(char ** arguments)
         if (!strcmp(* arguments, "group"))
         {
             if (bot < top)
-                execl("./sub", "sub", group_stack[bot], NULL);
+                execl("./sub.out", "sub.out", group_stack[bot], NULL);
         }
         else
             execvp(* arguments, arguments);
