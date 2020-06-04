@@ -1,8 +1,8 @@
 //
-//  main.c
-//  myshell
+//  sub.c
+//  subshell
 //
-//  Created by Haeseok Lee on 2020/05/12.
+//  Created by Haeseok Lee on 2020/06/05.
 //  Copyright © 2020 Haeseok Lee. All rights reserved.
 //
 #include <stdio.h>
@@ -44,41 +44,34 @@ char * string_slicer(int start, int end, char * str);
 char * string_replacer(int start, int end, char * str, char * str2);
 
 
-int main()
+int main(int argc, char *argv[])
 {
     // store standard fd
     s_stdin = dup(STDIN_FILENO);
     s_sterr = dup(STDERR_FILENO);
     s_stdout = dup(STDOUT_FILENO);
-    while (1)
-    {
-        char hostname[MAXHOSTNAMELEN] = {'\0'};
-        char command[MAX_SIZE] = {'\0'};
+    char command[MAX_SIZE] = {'\0'};
+
+    // initialize vars
+    idx = 0;
+    ispipe = 0;
+    isbackground = 0;
     
-        // initialize vars
-        idx = top = ispipe = isbackground = 0;
-        bot = -1;
-        memset(group_stack, '\0', MAX_SIZE);
-        
-        // initialize standard fd
-        dup2(s_stdin, STDIN_FILENO);
-        dup2(s_sterr, STDERR_FILENO);
-        dup2(s_stdout, STDOUT_FILENO);
-        
-        // get host name
-        gethostname(hostname, MAXHOSTNAMELEN);
-        
-        // print shell prompt
-        printf("%s@%s:%s 🔥🔥🔥 ", getenv("USER"), hostname, getcwd(NULL, 0));
-        
-        fgets(command, MAX_SIZE, stdin);
-        command[strlen(command)-1] = '\0';
-        
-        if (!strlen(command))
-            continue;
-        
-        start(command);
-    }
+    // initialize standard fd
+    dup2(s_stdin, STDIN_FILENO);
+    dup2(s_sterr, STDERR_FILENO);
+    dup2(s_stdout, STDOUT_FILENO);
+    
+    if (argc != 2)
+        return 0;
+
+    strcpy(command, argv[1]);
+    command[strlen(command)] = '\0';
+    
+    if (!strlen(command))
+        return 0;
+    
+    start(command);
 }
 
 void start(char * com)
@@ -92,8 +85,6 @@ void start(char * com)
     command = history_replace(t_command);
     if (strcmp(command, t_command) != 0)
         puts(command);
-    
-    my_history("append", command);
     
     command = group_replace(command);
 
@@ -432,7 +423,7 @@ void my_fork(char ** arguments)
         if (!strcmp(* arguments, "group"))
         {
             if (bot < top)
-                execl("./sub", "sub", group_stack[bot], NULL);
+                execl("./subshell", "subshell", group_stack[bot], NULL);
         }
         else
             execvp(* arguments, arguments);
