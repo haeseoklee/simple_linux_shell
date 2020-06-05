@@ -50,6 +50,12 @@ int main()
     s_stdin = dup(STDIN_FILENO);
     s_sterr = dup(STDERR_FILENO);
     s_stdout = dup(STDOUT_FILENO);
+
+    // register subshell in env
+    char path[MAX_SIZE] = {0};
+    sprintf(path, "PATH=%s:%s", getcwd(NULL, 0), getenv("PATH"));
+    putenv(path);
+
     while (1)
     {
         char hostname[MAXHOSTNAMELEN] = {'\0'};
@@ -432,7 +438,7 @@ void my_fork(char ** arguments)
         if (!strcmp(* arguments, "group"))
         {
             if (bot < top)
-                execl("./sub.out", "sub.out", group_stack[bot], NULL);
+                execlp("sub.out", "sub.out", group_stack[bot], NULL);
         }
         else
             execvp(* arguments, arguments);
