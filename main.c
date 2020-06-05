@@ -16,7 +16,7 @@
 #define MAX_SIZE     1024
 #define EXIT_FAILURE 1
 #define EXIT_SUCCESS 0
-#define PERM         0777
+#define PERM         0644
 
 int idx, top, bot, s_stdin, s_stdout, s_sterr;
 int fd[2], rfd;
@@ -657,7 +657,7 @@ char * string_replacer(int start, int end, char * str, char * str2)
 char * redirect_replace(char * com)
 {
     int i, start = 0, end = 0;
-    int flag1 = 0, flag2 = 0, enter = 0;
+    int flag1 = 0, flag2 = 0;
     char * command;
     char * new_command;
     if ((command = (char *)malloc(MAX_SIZE)) == NULL)
@@ -675,30 +675,29 @@ char * redirect_replace(char * com)
             {
                 start = i;
                 flag1 = 1;
-                enter = 1;
+                if (i+1 < strlen(command))
+                {
+                    if (command[i+1] == '|')
+                    {
+                        flag2 = 1;
+                        end = i+1;
+                        break;
+                    }
+                }
+                    
             }
-            else if (command[i] == '|')
-            {
-                end = i;
-                flag2 = 1;
-            }
-            else
-                if (enter)
-                    break;
-        
         }
-        if (flag1 == 0 || flag2 == 0 || end <= start || enter == 0)
+        if (flag1 == 0 || flag2 == 0 || start + 1 != end)
             break;
         
         command = string_replacer(start, end+1, command, ">!");
 
         start = end = 0;
-        flag1 = flag2 = enter = 0;
+        flag1 = flag2 = 0;
     }
     
     return command;
 }
-
 
 
 char * group_replace(char * com)
@@ -746,7 +745,7 @@ char * group_replace(char * com)
 char * history_replace(char * com)
 {
     int i, start = 0, end = 0;
-    int flag1 = 0, flag2 = 0, enter = 0;
+    int flag1 = 0, flag2 = 0;
     char * command;
     char * new_command;
     if ((command = (char *)malloc(MAX_SIZE)) == NULL)
@@ -764,19 +763,18 @@ char * history_replace(char * com)
             {
                 start = i;
                 flag1 = 1;
-                enter = 1;
             }
-            else if (48 <= command[i] && command[i] <= 57)
+            else if (48 <= command[i] && command[i] <= 57 && flag1)
             {
                 end = i;
                 flag2 = 1;
             }
             else
-                if (enter)
+                if (flag1)
                     break;
         
         }
-        if (flag1 == 0 || flag2 == 0 || end <= start || enter == 0)
+        if (flag1 == 0 || flag2 == 0 || end <= start)
             break;
         
         
@@ -784,7 +782,7 @@ char * history_replace(char * com)
         command = string_replacer(start, end+1, command, new_command);
 
         start = end = 0;
-        flag1 = flag2 = enter = 0;
+        flag1 = flag2 = 0;
     }
     
     return command;

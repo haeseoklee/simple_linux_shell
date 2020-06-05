@@ -26,7 +26,6 @@ char * group_stack[MAX_SIZE];
 
 int token_counter(char * line, char * letter);
 int command_counter(char * line, char * word);
-char * command_replace(char * line, char * word, char * word2);
 char ** get_splited_args(char * com, char * letter);
 char ** get_bisected_args(char * com, char * letter);
 void start(char * command);
@@ -38,7 +37,8 @@ void my_set(char ** arguments);
 void fatal(char * message, int code);
 char * strip(char * word, char letter);
 char * history_replace(char * command);
-char * group_replace(char * com);
+char * group_replace(char * command);
+char * redirect_replace(char * command);
 char * get_front_redirect(char * line);
 char * string_slicer(int start, int end, char * str);
 char * string_replacer(int start, int end, char * str, char * str2);
@@ -53,9 +53,7 @@ int main(int argc, char *argv[])
     char command[MAX_SIZE] = {'\0'};
 
     // initialize vars
-    idx = 0;
-    ispipe = 0;
-    isbackground = 0;
+    idx = ispipe = isbackground = 0;
     
     // initialize standard fd
     dup2(s_stdin, STDIN_FILENO);
@@ -87,6 +85,7 @@ void start(char * com)
         puts(command);
     
     command = group_replace(command);
+    command = redirect_replace(command);
 
     semicolon_num = command_counter(command, ";");
     arguments0 = get_splited_args(command, ";");
@@ -106,8 +105,6 @@ void start(char * com)
             isbackground = 0;
             if (b++ < background_num)
                 isbackground = 1;
-            
-            *(arguments1 + j) = command_replace(*(arguments1 + j), ">|", ">!");
             
             p = 0;
             pipe_num = command_counter(*(arguments1 + j), "|");
@@ -302,46 +299,6 @@ char * get_front_redirect(char * com)
         return letter;
     }
     return "";
-}
-
-
-
-char * command_replace(char * line, char * word, char * word2)
-{
-    if (line == NULL || word == NULL || word2 == NULL)
-        return "";
-    int flag;
-    size_t linelen = strlen(line);
-    size_t wordlen = strlen(word);
-    size_t word2len = strlen(word2);
-    for (int i = 0; i < linelen; i++)
-    {
-        flag = 1;
-        for (int j = 0; j < wordlen; j++)
-        {
-            if (i+j >= linelen)
-            {
-                flag = 0;
-                break;
-            }
-            if (line[i+j] != word[j])
-            {
-                flag = 0;
-                break;
-            }
-        }
-        if (flag)
-        {
-            for (int j = 0; j < word2len; j++)
-            {
-                if (i+j >= linelen)
-                    break;
-                line[i+j] = word2[j];
-            }
-        }
-    }
-
-    return line;
 }
 
 
@@ -680,6 +637,52 @@ char * string_replacer(int start, int end, char * str, char * str2)
     sprintf(result, "%s%s%s", left, str2, right);
     return result;
 }
+
+char * redirect_replace(char * com)
+{
+    int i, start = 0, end = 0;
+    int flag1 = 0, flag2 = 0;
+    char * command;
+    char * new_command;
+    if ((command = (char *)malloc(MAX_SIZE)) == NULL)
+        fatal("Can not allocate memory!", EXIT_FAILURE);
+    
+    memset(command, '\0', MAX_SIZE);
+    
+    strcpy(command, com);
+    
+    while(1)
+    {
+        for(i = 0; i < strlen(command); i++)
+        {
+            if (command[i] == '>')
+            {
+                start = i;
+                flag1 = 1;
+                if (i+1 < strlen(command))
+                {
+                    if (command[i+1] == '|')
+                    {
+                        flag2 = 1;
+                        end = i+1;
+                        break;
+                    }
+                }
+                    
+            }
+        }
+        if (flag1 == 0 || flag2 == 0 || start + 1 != end)
+            break;
+        
+        command = string_replacer(start, end+1, command, ">!");
+
+        start = end = 0;
+        flag1 = flag2 = 0;
+    }
+    
+    return command;
+}
+
 
 char * group_replace(char * com)
 {
