@@ -16,13 +16,13 @@
 #define MAX_SIZE     1024
 #define EXIT_FAILURE 1
 #define EXIT_SUCCESS 0
-#define PERM         0777
+#define PERM         0644
 
 int idx, top, bot, s_stdin, s_stdout, s_sterr;
 int fd[2], rfd;
 int isbackground = 0, ispipe = 0;
 char ** arguments0, ** arguments1, ** arguments2, ** arguments3, ** arguments4;
-char * group_stack[MAX_SIZE];
+char * group_queue[MAX_SIZE];
 
 int token_counter(char * line, char * letter);
 int command_counter(char * line, char * word);
@@ -378,7 +378,7 @@ void my_fork(char ** arguments)
         if (!strcmp(* arguments, "group"))
         {
             if (bot < top)
-                execl("./subshell", "subshell", group_stack[bot], NULL);
+                execl("./subshell", "subshell", group_queue[bot], NULL);
         }
         else
             execvp(* arguments, arguments);
@@ -716,7 +716,7 @@ char * group_replace(char * com)
         }
         if (flag1 == 0 || flag2 == 0 || end <= start)
             break;
-        group_stack[top++] = string_slicer(start+1, end, command);
+        group_queue[top++] = string_slicer(start+1, end, command);
         command = string_replacer(start, end+1, command, "group");
         
         start = end = 0;
