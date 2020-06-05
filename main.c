@@ -418,8 +418,6 @@ void my_fork(char ** arguments)
     if (ispipe)
     {
         pipe(fd);
-//        fcntl(fd[0], fcntl(fd[0], F_SETPIPE_SZ, 1024 * 1024);
-//        fcntl(fd[1], F_SETPIPE_SZ, 1024 * 1024);
     }
     if (!strcmp(* arguments, "group"))
         bot++;
@@ -459,7 +457,6 @@ void my_fork(char ** arguments)
         }
         else
         {
-//            sleep(1);
             if((pid = waitpid(pid, &status, 0)) < 0)
                 fatal("Can not wait!", EXIT_FAILURE);
             
