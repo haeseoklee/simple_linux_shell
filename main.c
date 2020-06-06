@@ -136,25 +136,24 @@ void start(char * com)
                 arguments3 = get_bisected_args(*(arguments2 + k), redirect_symbol);
                 
 
-                for (;;)
+                while (1)
                 {
                     
                     if (* (arguments3) == NULL)
                         break;
                     
-                    if (* (arguments3 + 1) == NULL)
-                        * (arguments3 + 1) = "";
-                    
-                    char * symbols[6] = {">", "2>", ">>", "<", ">!"};
-                    for (int l = 0; l < 5; l++)
-                        if (!strcmp(redirect_symbol, symbols[l]))
-                            my_redirection(redirect_symbol, *(arguments3 + 1));
-                    
+                    if (* (arguments3 + 1) != NULL)
+                    {
+                        char * symbols[6] = {">", "2>", ">>", "<", ">!"};
+                        for (int l = 0; l < 5; l++)
+                            if (!strcmp(redirect_symbol, symbols[l]))
+                                my_redirection(redirect_symbol, *(arguments3 + 1));
+                    }
                     
                     arguments4 = get_splited_args(* arguments3, " ");
                     
                     if (* arguments4 == NULL)
-                        puts("");
+                        break;
                     else if (!strcmp(* arguments4, "cd"))
                         my_cd(arguments4);
                     else if (!strcmp(* arguments4, "set"))
@@ -384,12 +383,14 @@ void my_fork(char ** arguments)
         fatal("Can not fork!", EXIT_FAILURE);
     
     // execute child process
+    
     else if (pid == 0)
     {
         if (ispipe)
         {
             close(fd[0]);
             dup2(fd[1], STDOUT_FILENO);
+            close(fd[1]);
         }
         if (!strcmp(* arguments, "group"))
         {
@@ -408,6 +409,7 @@ void my_fork(char ** arguments)
         {
             close(fd[1]);
             dup2(fd[0], STDIN_FILENO);
+            close(fd[0]);
         }
         if (isbackground)
         {
@@ -417,12 +419,6 @@ void my_fork(char ** arguments)
         {
             if((pid = waitpid(pid, &status, 0)) < 0)
                 fatal("Can not wait!", EXIT_FAILURE);
-            
-        }
-        if (!ispipe)
-        {
-            close(fd[0]);
-            close(fd[1]);
         }
     }
 }
@@ -513,13 +509,10 @@ void my_set(char ** arguments)
 
 void my_cd(char ** arguments)
 {
-    char * path;
     if (*(arguments + 1) == NULL)
         chdir(getenv("HOME"));
     else
         chdir(*(arguments + 1));
-    if ((path = getcwd(NULL, 0)) == NULL)
-        fatal("Can not get path", EXIT_FAILURE);
 }
 
 void fatal(char * message, int code)
